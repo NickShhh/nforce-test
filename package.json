@@ -1,0 +1,17 @@
+{
+  "name": "nforce-test-bot",
+  "version": "1.0.0",
+  "description": "Un bot de Discord de prueba para Render.",
+  "main": "test_bot.js",
+  "scripts": {
+    "start": "node test_bot.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}
