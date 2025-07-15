@@ -1,8 +1,7 @@
-require('dotenv').config(); // Asegúrate de que esto no causa problemas si no usas .env en Render
+require('dotenv').config();
 
 const { Client, GatewayIntentBits } = require('discord.js');
 
-// Asegúrate de que este token proviene de las variables de entorno de Render
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 
 if (!DISCORD_BOT_TOKEN) {
@@ -13,35 +12,55 @@ if (!DISCORD_BOT_TOKEN) {
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds, // El intent más básico para conectarse
-        // No añadas otros intents por ahora para minimizar posibles fallos
+        // No añadas otros intents aquí por ahora para minimizar posibles puntos de fallo.
+        // Si funciona solo con Guilds, luego podemos añadir más.
     ]
 });
 
+let botReady = false; // Flag para rastrear si el bot entró en estado "ready"
+
 client.once('ready', () => {
+    botReady = true;
     console.log(`¡[TEST BOT] Conectado a Discord como ${client.user.tag}!`);
-    // Si el bot se conecta, Render dejará de dar timeout y verás este mensaje.
-    // Aquí puedes hacer un process.exit(0) si no quieres que Render intente servir una web.
-    // O simplemente dejar que Render lo detecte como un worker.
+    // No llamamos a process.exit() aquí. Dejamos que el servidor Express mantenga la aplicación viva para Render.
 });
 
 client.on('error', error => {
-    console.error('[TEST BOT] Error del cliente de Discord:', error);
-    // Puedes agregar más manejo de errores si es necesario
+    console.error('[TEST BOT] Error del cliente de Discord (evento "error"):', error);
+    // Este evento captura errores de la conexión del bot después del login.
 });
 
-console.log('[TEST BOT] Intentando iniciar sesión...');
-client.login(DISCORD_BOT_TOKEN)
-    .then(() => console.log('[TEST BOT] La promesa de login se resolvió (¡bot conectado o intentando conectar!).'))
+console.log('[TEST BOT] Intentando iniciar sesión de Discord...');
+
+const discordLoginPromise = client.login(DISCORD_BOT_TOKEN);
+const timeoutPromise = new Promise((resolve, reject) => {
+    setTimeout(() => {
+        if (!botReady) {
+            // Si el bot no está "ready" después de 60 segundos, rechazamos el timeout.
+            reject(new Error('Timeout: El bot de Discord de prueba no se conectó o no disparó el evento "ready" en 60 segundos.'));
+        } else {
+            // Si el bot ya está "ready", resolvemos el timeout (no es un error).
+            resolve();
+        }
+    }, 60000); // 60 segundos de tiempo límite
+});
+
+Promise.race([discordLoginPromise, timeoutPromise])
+    .then(() => {
+        console.log('[TEST BOT] La promesa de login/timeout se resolvió exitosamente.');
+        if (!botReady) {
+            console.warn('[TEST BOT] ADVERTENCIA: La promesa de login resolvió, pero el evento "ready" no se disparó en 60 segundos. El bot podría no estar completamente operativo.');
+        }
+    })
     .catch(error => {
-        console.error('[TEST BOT] Error al iniciar sesión:', error);
-        // Si llega aquí, el login falló antes del timeout manual
+        console.error('[TEST BOT] Error FATAL al iniciar el bot de prueba de Discord:', error);
+        // Salimos solo si hay un error explícito en el login o el timeout.
         process.exit(1);
     });
 
-// Para que Render no se queje de "No open ports detected" en un Web Service
-// Puedes comentar esto si lo despliegas como un "Worker" en Render.
+// --- Servidor Express para mantener el servicio activo en Render ---
 const express = require('express');
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3000; // Render usa process.env.PORT
 app.get('/', (req, res) => res.send('Test bot express server running.'));
 app.listen(port, () => console.log(`[TEST BOT] Express server listening on port ${port}`));
